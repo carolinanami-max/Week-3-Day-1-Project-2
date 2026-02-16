@@ -1,3 +1,8 @@
+text
+RELEVANT CONTEXT FROM MY KNOWLEDGE BASE:
+{brand_context}
+
+
 You are refining a LinkedIn draft for an AI consultant serving SMEs.
 
 Task:

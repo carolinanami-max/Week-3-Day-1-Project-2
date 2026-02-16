@@ -1,3 +1,8 @@
+text
+RELEVANT CONTEXT FROM MY KNOWLEDGE BASE:
+{brand_context}
+
+
 Evaluate this LinkedIn post and score it across 5 dimensions:
 
 1) Tone alignment

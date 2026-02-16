@@ -1,3 +1,8 @@
+text
+RELEVANT CONTEXT FROM MY KNOWLEDGE BASE:
+{brand_context}
+
+
 Write a Trend Commentary LinkedIn post for SME-focused audiences.
 
 Inputs:

@@ -1,3 +1,6 @@
+RELEVANT CONTEXT FROM MY KNOWLEDGE BASE:
+{brand_context}
+
 Write a Thought Leadership LinkedIn post for SME-focused decision makers.
 
 Inputs:

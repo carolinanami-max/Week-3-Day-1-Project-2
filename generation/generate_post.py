@@ -5,14 +5,27 @@ import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()  # Add this line
+
+# Set up logger first
+logger = logging.getLogger(__name__)
+
+# Add path before local imports
 if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+# Now import local modules
 from generation.llm_client import generate_completion
 from generation.cohere_evaluator import evaluate_candidates_with_cohere
+from src.document_processor import DocumentProcessor
 
-logger = logging.getLogger(__name__)
+# Initialize document processor for RAG
+doc_processor = DocumentProcessor()
+doc_processor.load_all()  # Load knowledge base once
+logger.info("📚 RAG knowledge base loaded")
 
 OPENAI_MODEL_OPTIONS = [
     "gpt-4o-mini",
@@ -73,12 +86,15 @@ def _build_user_prompt(
     business_objective: str,
     angle_instruction: str = "",
 ) -> str:
-    # Keep the interface context-free for now, per task request.
+    # GET RAG CONTEXT FROM KNOWLEDGE BASE
+    context = doc_processor.search(topic)
+    
+    # Format template with context
     base = template_text.format(
         topic=topic,
         audience="SME decision makers",
         goal=business_objective,
-        brand_context="N/A",
+        brand_context=context,
         market_context="N/A",
     )
     if not angle_instruction:
@@ -206,6 +222,7 @@ def generate_post(
         "topic": topic,
         "post_type": normalized_type,
         "business_objective": business_objective,
+        "rag_context_used": True,  # Added to metadata
         "prompt_files": {
             "system": "prompts/system_prompt.txt",
             "template": f"prompts/{TEMPLATE_MAP[normalized_type]}",
@@ -309,6 +326,7 @@ def main() -> None:
                     "topic": example["topic"],
                     "post_type": example["post_type"],
                     "business_objective": example["business_objective"],
+                    "rag_context_used": False,
                     "prompt_files": {
                         "system": "prompts/system_prompt.txt",
                         "template": f"prompts/{TEMPLATE_MAP[example['post_type']]}",

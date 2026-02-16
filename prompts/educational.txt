@@ -1,3 +1,8 @@
+text
+RELEVANT CONTEXT FROM MY KNOWLEDGE BASE:
+{brand_context}
+
+
 Write an Educational LinkedIn post for SME operators and leadership teams.
 
 Inputs:
