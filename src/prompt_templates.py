@@ -2,104 +2,77 @@ class PromptTemplates:
     """Reusable prompt templates for personal branding LinkedIn content"""
     
     @staticmethod
-    def linkedin_post():
-        return """
-        You are a personal branding expert creating authentic LinkedIn content.
-        
-        {context}
-        
-        Topic: {topic}
-        Your Expertise: {expertise}
-        Target Audience: {audience}
-        
-        REQUIREMENTS FOR AUTHENTIC PERSONAL BRAND:
-        - Write in first-person perspective (I, me, my)
-        - Share a personal insight, lesson learned, or real experience
-        - Avoid corporate jargon and generic motivational quotes
-        - Include a specific example or story from your work
-        - End with a question to encourage comments
-        - Keep it conversational, not salesy
-        - Use short paragraphs for readability
-        
-        Create the LinkedIn post now:
-        """
-    
-    @staticmethod
-    def linkedin_carousel():
-        return """
-        Create a LinkedIn carousel post (slide-by-slide format) about:
-        
-        {context}
-        
-        Topic: {topic}
-        Your Unique Perspective: {perspective}
-        
-        FORMAT:
-        Slide 1 - Hook: [Attention-grabbing headline that reflects your personal brand]
-        Slide 2 - Problem: [A challenge you personally faced or observed]
-        Slide 3 - Insight: [What you learned from experience/context]
-        Slide 4 - Action: [Practical advice your audience can use]
-        Slide 5 - CTA: [Question to engage your network]
-        
-        Make each slide 1-2 sentences maximum. Be authentic, not promotional.
-        """
-    
-    @staticmethod
     def thought_leadership():
         return """
-        Write a thought leadership LinkedIn post that positions you as an expert.
+        You are a personal branding expert creating LinkedIn content.
         
         {context}
         
         Topic: {topic}
-        Your Unique Angle: {angle}
         
-        STRUCTURE:
-        - Start with a controversial or bold statement (your real opinion)
-        - Back it up with personal experience or data from context
-        - Acknowledge the other side (show balanced thinking)
-        - Share your conclusion and why it matters
-        - Ask for others' perspectives
+        Create a Thought Leadership Post following this structure:
         
-        Make it sound like YOU, not a generic AI. Be specific and opinionated.
-        """
-    
-    @staticmethod
-    def story_post():
-        return """
-        Turn this experience into an engaging LinkedIn story:
-        
-        {context}
-        
-        Topic: {topic}
-        The Lesson: {lesson}
-        
-        STORY FRAMEWORK:
-        - Setup: What happened before? (short)
-        - Conflict: What challenge did you face? (specific details)
-        - Resolution: How did you handle it? (your actions)
-        - Takeaway: What did you learn? (value for audience)
-        
-        Write conversationally. Use "I" statements. Show vulnerability if appropriate.
-        """
-    
-    @staticmethod
-    def engagement_post():
-        return """
-        Create a high-engagement LinkedIn post that sparks conversation.
-        
-        {context}
-        
-        Topic: {topic}
-        Question to Ask: {question}
+        HOOK: An attention-grabbing opening that challenges conventional thinking
+        INSIGHT: A deep observation or pattern you've noticed in your work
+        PERSONAL POV: Your unique perspective based on your experience
+        ACTIONABLE TAKEAWAY: What your audience can do with this insight
         
         REQUIREMENTS:
-        - Start with a relatable statement or observation
-        - Share your honest take (even if slightly controversial)
-        - Ask the community for their experience
-        - Reply to comments to boost engagement
+        - Write in first-person (I, me, my)
+        - Share real experience from context
+        - Avoid generic advice
+        - End with a question to engage
         
-        Write the post now:
+        Write the thought leadership post now:
+        """
+    
+    @staticmethod
+    def educational_post():
+        return """
+        You are a personal branding expert creating LinkedIn content.
+        
+        {context}
+        
+        Topic: {topic}
+        
+        Create an Educational Post following this structure:
+        
+        PROBLEM: A common challenge your audience faces
+        EXPLANATION: Why this problem exists (based on your expertise)
+        FRAMEWORK: A simple framework or step-by-step approach to solve it
+        EXAMPLE: A real example applying the framework
+        
+        REQUIREMENTS:
+        - Write in first-person (I, me, my)
+        - Use specific examples from context
+        - Make complex ideas simple
+        - Include practical steps
+        
+        Write the educational post now:
+        """
+    
+    @staticmethod
+    def opinion_post():
+        return """
+        You are a personal branding expert creating LinkedIn content.
+        
+        {context}
+        
+        Topic: {topic}
+        
+        Create an Opinion / Commentary Post following this structure:
+        
+        TREND SUMMARY: Briefly describe what everyone is talking about
+        YOUR STANCE: Where you stand on this topic (be clear)
+        CONTRARIAN INSIGHT: A perspective that goes against the grain
+        
+        REQUIREMENTS:
+        - Write in first-person (I, me, my)
+        - Be specific about your disagreement
+        - Back it up with experience from context
+        - Be respectful but confident
+        
+        Write the opinion post now:
         """
     
     @staticmethod

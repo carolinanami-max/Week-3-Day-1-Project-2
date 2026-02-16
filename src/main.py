@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from document_processor import DocumentProcessor
 from llm_integration import LLMIntegration
 from prompt_templates import PromptTemplates
+from human_voice_engine import HumanVoiceEngine
 
 # Load environment variables
 load_dotenv()
@@ -15,6 +16,7 @@ class PersonalBrandContentCreator:
         self.doc_processor = DocumentProcessor()
         self.llm = LLMIntegration(api_key=os.getenv("OPENAI_API_KEY"))
         self.templates = PromptTemplates()
+        self.human_voice = HumanVoiceEngine()
         
         # Load knowledge bases
         self.load_knowledge_bases()
@@ -25,49 +27,39 @@ class PersonalBrandContentCreator:
         self.doc_processor.load_all()
         print("✅ Ready to create content!\n")
     
-    def create_linkedin_post(self, topic: str, expertise: str = "", audience: str = "my network"):
-        """Generate an authentic LinkedIn post"""
+    def create_with_human_voice(self, template_type: str, topic: str):
+        """Generate content using the human voice engine"""
         print(f"🔍 Finding relevant context for: '{topic}'")
-        
-        # Get relevant context from your knowledge bases
         context = self.doc_processor.search(topic)
         
-        # Get template and format
-        template = self.templates.linkedin_post()
-        prompt = template.format(
-            context=context,
-            topic=topic,
-            expertise=expertise,
-            audience=audience
-        )
+        # Add human voice system prompt
+        system_prompt = self.human_voice.get_system_prompt()
         
-        # Generate content
-        print("✍️ Writing your LinkedIn post...")
-        content = self.llm.generate(prompt)
+        # Select the right template
+        if template_type == "observation":
+            template = self.human_voice.get_observation_post_template()
+        elif template_type == "pattern":
+            template = self.human_voice.get_pattern_recognition_template()
+        elif template_type == "contrast":
+            template = self.human_voice.get_market_contrast_template()
+        else:
+            template = self.human_voice.get_observation_post_template()
         
-        return content
+        # Combine system prompt with template
+        full_prompt = f"{system_prompt}\n\n{template.format(context=context, topic=topic)}"
+        
+        print("✍️ Writing with human consulting voice...")
+        return self.llm.generate(full_prompt, temperature=0.8)
     
-    def create_carousel(self, topic: str, perspective: str = ""):
-        """Generate a LinkedIn carousel post"""
-        context = self.doc_processor.search(topic)
-        template = self.templates.linkedin_carousel()
-        prompt = template.format(
-            context=context,
-            topic=topic,
-            perspective=perspective
-        )
-        return self.llm.generate(prompt)
+    def check_authenticity(self, content: str):
+        """Check if content passes the anti-GPT test"""
+        check_prompt = self.human_voice.get_authenticity_check().format(content=content)
+        return self.llm.generate(check_prompt)
     
-    def create_thought_leadership(self, topic: str, angle: str = ""):
-        """Generate a thought leadership post"""
-        context = self.doc_processor.search(topic)
-        template = self.templates.thought_leadership()
-        prompt = template.format(
-            context=context,
-            topic=topic,
-            angle=angle
-        )
-        return self.llm.generate(prompt)
+    def rewrite_content(self, content: str):
+        """Rewrite generic content with human voice"""
+        rewrite_prompt = self.human_voice.rewrite_with_human_voice().format(content=content)
+        return self.llm.generate(rewrite_prompt)
 
 def main():
     # Create the content creator
@@ -78,42 +70,64 @@ def main():
         print("\n" + "="*50)
         print("PERSONAL BRAND LINKEDIN CONTENT CREATOR")
         print("="*50)
-        print("1. Create authentic LinkedIn post")
-        print("2. Create LinkedIn carousel")
-        print("3. Create thought leadership post")
-        print("4. Exit")
+        print("HUMAN CONSULTING VOICE - ANTI-GPT ENGINE")
+        print("-"*50)
+        print("1. Observation Post (Real observation → Unexpected angle → Example → Open implication)")
+        print("2. Pattern Recognition Post (Pattern → Assumption → Reality → Why it matters)")
+        print("3. Market Contrast Post (Two environments → Behavioral difference → Outcome)")
+        print("4. Check content authenticity (Anti-GPT test)")
+        print("5. Rewrite generic content with human voice")
+        print("6. Exit")
         
-        choice = input("\nChoose an option (1-4): ")
+        choice = input("\nChoose an option (1-6): ")
         
-        if choice == "4":
+        if choice == "6":
             print("👋 Good luck with your personal brand!")
             break
         
-        topic = input("What topic do you want to post about? ")
-        
-        if choice == "1":
-            expertise = input("Your expertise in this area (optional): ")
-            content = creator.create_linkedin_post(topic, expertise)
+        if choice == "4":
+            content = input("Paste your content to check: ")
+            result = creator.check_authenticity(content)
             print("\n" + "="*50)
-            print("YOUR LINKEDIN POST:")
+            print("AUTHENTICITY CHECK:")
             print("="*50)
+            print(result)
+            
+        elif choice == "5":
+            content = input("Paste generic content to rewrite: ")
+            result = creator.rewrite_content(content)
+            print("\n" + "="*50)
+            print("REWRITTEN WITH HUMAN VOICE:")
+            print("="*50)
+            print(result)
+            
+        else:
+            topic = input("What topic do you want to post about? ")
+            
+            if choice == "1":
+                content = creator.create_with_human_voice("observation", topic)
+                print("\n" + "="*50)
+                print("YOUR OBSERVATION POST:")
+                print("="*50)
+            elif choice == "2":
+                content = creator.create_with_human_voice("pattern", topic)
+                print("\n" + "="*50)
+                print("YOUR PATTERN RECOGNITION POST:")
+                print("="*50)
+            elif choice == "3":
+                content = creator.create_with_human_voice("contrast", topic)
+                print("\n" + "="*50)
+                print("YOUR MARKET CONTRAST POST:")
+                print("="*50)
+            
             print(content)
             
-        elif choice == "2":
-            perspective = input("Your unique perspective (optional): ")
-            content = creator.create_carousel(topic, perspective)
-            print("\n" + "="*50)
-            print("YOUR CAROUSEL POST:")
-            print("="*50)
-            print(content)
-            
-        elif choice == "3":
-            angle = input("Your unique angle (optional): ")
-            content = creator.create_thought_leadership(topic, angle)
-            print("\n" + "="*50)
-            print("YOUR THOUGHT LEADERSHIP POST:")
-            print("="*50)
-            print(content)
+            # Optional authenticity check
+            check = input("\nRun authenticity check? (y/n): ")
+            if check.lower() == 'y':
+                result = creator.check_authenticity(content)
+                print("\n" + "-"*30)
+                print(result)
         
         input("\nPress Enter to continue...")
 
