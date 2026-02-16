@@ -24,12 +24,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
 SOFIE_PHOTO_PATH = ASSETS_DIR / "sopie_bennett.png"
 PROFILE_IMAGE_PATH = SOFIE_PHOTO_PATH
-DEFAULT_USER_ID = "sofie_bennet"
-DEFAULT_BRAND_PROFILE = (
-    "AI consultant for SMEs in the German market focused on practical AI adoption. "
-    "Core themes: automation for lean teams, ROI-focused implementation, "
-    "risk-aware rollout, and real case-based guidance."
-)
 
 COHERE_MODEL_OPTIONS = [
     "command-a-03-2025",
@@ -324,17 +318,8 @@ def generate_content_pillars(
         message = "OPENAI_API_KEY not found in environment."
         return {"error": message}, message, gr.update()
 
-    user_id = DEFAULT_USER_ID
-    brand_profile = DEFAULT_BRAND_PROFILE
-    persona_text = (target_persona or "").strip()
-    if persona_text:
-        brand_profile = f"{brand_profile} Target persona: {persona_text}."
-
     template = _load_prompt_file("pillar_generation_prompt.txt")
-    user_prompt = template.format(
-        user_id=user_id,
-        brand_profile=brand_profile,
-    )
+    user_prompt = template
     config = {
         "model": (custom_model or model or "").strip(),
         "temperature": temperature,
@@ -358,7 +343,7 @@ def generate_content_pillars(
             config=config,
         )
         payload = _extract_json_payload(result.get("content", ""))
-        payload["user_id"] = payload.get("user_id") or user_id
+        payload["user_id"] = payload.get("user_id") or ""
         payload["version"] = payload.get("version") or "v1"
         payload["created_at"] = payload.get("created_at") or datetime.now(timezone.utc).isoformat()
 
@@ -746,7 +731,7 @@ def build_interface() -> gr.Blocks:
                         pillars_json = gr.JSON(
                             label="Pillars JSON",
                             value={
-                                "user_id": DEFAULT_USER_ID,
+                                "user_id": "",
                                 "created_at": "",
                                 "version": "v1",
                                 "pillars": [],

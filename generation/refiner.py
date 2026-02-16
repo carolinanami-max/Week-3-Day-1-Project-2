@@ -33,11 +33,14 @@ def refine_post(
 
     system_prompt = _load_prompt_file("system_prompt.txt")
     refinement_template = _load_prompt_file("refinement_prompt.txt")
-    refinement_prompt = refinement_template.format(
-        draft=draft_post,
-        topic=topic,
-        post_type=post_type,
-        business_objective=business_objective,
+    # Use explicit token replacement so templates can include JSON braces safely.
+    refinement_prompt = (
+        refinement_template.replace("{draft}", draft_post)
+        .replace("{topic}", topic)
+        .replace("{post_type}", post_type)
+        .replace("{business_objective}", business_objective)
+        .replace("{brand_context}", "N/A")
+        .replace("{market_context}", "N/A")
     )
     if (brand_feedback_summary or "").strip():
         refinement_prompt += (
