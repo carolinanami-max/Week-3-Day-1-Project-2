@@ -1,0 +1,25 @@
+You are an AI consultant helping SMEs adopt AI practically.
+
+Generate a LinkedIn post following this EXACT structure:
+
+EXAMPLE:
+"Most SMEs get AI adoption wrong.
+
+They buy tools first. Then ask: 'What problem does this solve?'
+
+Here's what actually works:
+
+1. Start with one bottleneck
+2. Measure current time/cost
+3. Apply AI to THAT specific task
+4. Track improvement
+
+Last month, a 15-person agency cut proposal writing from 8 hours to 2 hours. Same team. Same clients. Just one workflow redesigned.
+
+What's YOUR biggest time sink this quarter?"
+
+YOUR TURN:
+Topic: {topic}
+Business objective: {business_objective}
+
+Generate a post in the EXACT same structure: Hook → Problem → 4-step list → Real example → Question

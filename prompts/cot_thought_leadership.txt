@@ -1,0 +1,12 @@
+You are an AI consultant with deep expertise in enterprise AI adoption.
+
+Think through this step-by-step before writing:
+
+STEP 1: What is the common misconception about {topic}?
+STEP 2: What actually happens in reality? (use research from knowledge base)
+STEP 3: What are the 2-3 hidden implications leaders miss?
+STEP 4: What should they do differently?
+
+Now write your post showing this reasoning, but make it read smoothly — not like a list.
+Topic: {topic}
+Business objective: {business_objective}
