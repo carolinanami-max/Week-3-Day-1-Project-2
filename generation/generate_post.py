@@ -115,8 +115,9 @@ def _generate_candidate_drafts(
     business_objective: str,
     config: Dict[str, Any],
     feedback_guidance: str = "",
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     candidates_by_index: Dict[int, Dict[str, Any]] = {}
+    failures_by_index: Dict[int, Dict[str, Any]] = {}
 
     def _generate_for_angle(index: int, angle_name: str, angle_instruction: str) -> Tuple[int, Dict[str, Any]]:
         user_prompt = _build_user_prompt(
@@ -156,13 +157,27 @@ def _generate_candidate_drafts(
         for future in concurrent.futures.as_completed(futures):
             try:
                 idx, candidate = future.result()
-            except Exception:
+            except Exception as exc:
+                failures_by_index[-len(failures_by_index) - 1] = {
+                    "angle": "unknown",
+                    "error": str(exc),
+                }
                 continue
-            if (candidate.get("text") or "").strip():
+            text = (candidate.get("text") or "").strip()
+            if text:
                 candidates_by_index[idx] = candidate
+            else:
+                failures_by_index[idx] = {
+                    "angle": candidate.get("angle"),
+                    "error": candidate.get("llm", {}).get("error") or "Empty response content from model.",
+                }
 
     ordered_indices = sorted(candidates_by_index.keys())
-    return [candidates_by_index[idx] for idx in ordered_indices]
+    ordered_failure_indices = sorted(failures_by_index.keys())
+    return (
+        [candidates_by_index[idx] for idx in ordered_indices],
+        [failures_by_index[idx] for idx in ordered_failure_indices],
+    )
 
 
 def _build_mock_post(topic: str, post_type: str, business_objective: str) -> str:
@@ -219,7 +234,7 @@ def generate_post(
     system_prompt = _load_prompt_file("system_prompt.txt")
     template_text = _load_prompt_file(TEMPLATE_MAP[normalized_type])
     feedback_guidance = str(config.get("feedback_guidance", "") or "")
-    candidates = _generate_candidate_drafts(
+    candidates, candidate_failures = _generate_candidate_drafts(
         system_prompt=system_prompt,
         template_text=template_text,
         topic=topic,
@@ -229,7 +244,11 @@ def generate_post(
         feedback_guidance=feedback_guidance,
     )
     if not candidates:
-        raise RuntimeError("Failed to generate candidate drafts.")
+        failure_summary = "; ".join(
+            f"{failure.get('angle', 'unknown')}: {failure.get('error', 'unknown error')}"
+            for failure in candidate_failures
+        ) or "No candidate output returned by model."
+        raise RuntimeError(f"Failed to generate candidate drafts. Details: {failure_summary}")
 
     best_index, evaluator_metadata = evaluate_candidates_with_cohere(
         topic=topic,
@@ -257,6 +276,7 @@ def generate_post(
             "selected_angle": selected["angle"],
             "evaluator": evaluator_metadata,
             "feedback_guidance_used": bool(feedback_guidance.strip()),
+            "failures": candidate_failures,
         },
         "candidates": candidates,
         "llm": {

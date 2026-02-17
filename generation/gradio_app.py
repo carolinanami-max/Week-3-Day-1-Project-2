@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import socket
 import sys
 import concurrent.futures
@@ -228,11 +229,31 @@ def _extract_json_payload(text: str) -> Dict[str, Any]:
     content = (text or "").strip()
     if not content:
         raise ValueError("Empty response content.")
+
+    # Strip fenced code blocks if present.
+    content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"\s*```$", "", content)
+
     start = content.find("{")
-    end = content.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    if start == -1:
         raise ValueError("No JSON object found in response.")
-    return json.loads(content[start : end + 1])
+
+    decoder = json.JSONDecoder()
+    parse_errors: List[str] = []
+
+    for candidate in (
+        content[start:],
+        re.sub(r",\s*([}\]])", r"\1", content[start:]),
+    ):
+        try:
+            payload, _ = decoder.raw_decode(candidate)
+            if not isinstance(payload, dict):
+                raise ValueError("Top-level JSON payload must be an object.")
+            return payload
+        except Exception as exc:
+            parse_errors.append(str(exc))
+
+    raise ValueError(f"Invalid JSON payload from model. Parse errors: {' | '.join(parse_errors)}")
 
 
 def _build_pillars_markdown(payload: Dict[str, Any]) -> str:
@@ -326,6 +347,7 @@ def generate_content_pillars(
         "max_tokens": max(600, int(max_tokens)),
         "retries": retries,
         "timeout": timeout,
+        "response_format": {"type": "json_object"},
     }
 
     try:
