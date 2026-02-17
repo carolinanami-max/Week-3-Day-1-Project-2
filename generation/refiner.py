@@ -6,6 +6,7 @@ if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from generation.llm_client import generate_completion
+from generation.generate_post import doc_processor
 
 
 def _project_root() -> Path:
@@ -31,7 +32,14 @@ def refine_post(
     if not (draft_post or "").strip():
         return "", {"error": "Draft post is empty."}
 
-    system_prompt = _load_prompt_file("system_prompt.txt")
+    rag_query = f"{topic}. Draft refinement for post type {post_type}. Objective: {business_objective}."
+    brand_context = doc_processor.search(rag_query)
+
+    system_prompt_template = _load_prompt_file("system_prompt.txt")
+    system_prompt = (
+        system_prompt_template.replace("{brand_context}", brand_context)
+        .replace("{market_context}", "N/A")
+    )
     refinement_template = _load_prompt_file("refinement_prompt.txt")
     # Use explicit token replacement so templates can include JSON braces safely.
     refinement_prompt = (
@@ -39,7 +47,7 @@ def refine_post(
         .replace("{topic}", topic)
         .replace("{post_type}", post_type)
         .replace("{business_objective}", business_objective)
-        .replace("{brand_context}", "N/A")
+        .replace("{brand_context}", brand_context)
         .replace("{market_context}", "N/A")
     )
     if (brand_feedback_summary or "").strip():

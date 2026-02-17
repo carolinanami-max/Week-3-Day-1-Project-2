@@ -1,5 +1,11 @@
 Generate strategic content pillars for an AI consultant serving SMEs.
 
+Target persona:
+{target_persona}
+
+Knowledge-base context (use this to ground your output):
+{brand_context}
+
 PROMPTING REQUIREMENTS (mandatory):
 - Generate 4-6 pillars maximum.
 - Do not include generic pillars like "AI News" unless the brand profile strongly justifies it.

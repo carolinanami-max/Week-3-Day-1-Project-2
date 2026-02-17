@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import socket
 import sys
 import concurrent.futures
@@ -13,7 +14,7 @@ from dotenv import load_dotenv
 if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from generation.generate_post import OPENAI_MODEL_OPTIONS, generate_post
+from generation.generate_post import OPENAI_MODEL_OPTIONS, generate_post, doc_processor
 from generation.llm_client import generate_completion
 from generation.brand_checker import check_brand_consistency
 from generation.refiner import refine_post
@@ -22,6 +23,8 @@ from generation.feedback_loop import build_feedback_guidance, save_feedback
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = PROJECT_ROOT / "assets"
+DATA_DIR = PROJECT_ROOT / "data"
+PILLARS_CACHE_PATH = DATA_DIR / "content_pillars.json"
 SOFIE_PHOTO_PATH = ASSETS_DIR / "sopie_bennett.png"
 PROFILE_IMAGE_PATH = SOFIE_PHOTO_PATH
 
@@ -224,15 +227,96 @@ def _load_prompt_file(filename: str) -> str:
     return prompt_path.read_text(encoding="utf-8").strip()
 
 
+def _build_pillar_prompt(template: str, target_persona: str) -> str:
+    persona = (target_persona or "").strip() or "SME decision-makers adopting AI"
+    rag_query = f"Content pillars for {persona}"
+    try:
+        brand_context = doc_processor.search(rag_query)
+    except Exception:
+        brand_context = "No specific context found. Use general knowledge."
+
+    # Use direct token replacement so JSON braces in the template remain intact.
+    return (
+        template.replace("{target_persona}", persona)
+        .replace("{brand_context}", brand_context)
+    )
+
+
+def _normalize_pillars_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(payload or {})
+    normalized["user_id"] = normalized.get("user_id") or ""
+    normalized["version"] = normalized.get("version") or "v1"
+    normalized["created_at"] = normalized.get("created_at") or datetime.now(timezone.utc).isoformat()
+    pillars = normalized.get("pillars", [])
+    if not isinstance(pillars, list):
+        raise ValueError("Invalid pillars payload: 'pillars' must be a list.")
+    normalized["pillars"] = pillars[:6]
+    return normalized
+
+
+def _load_cached_pillars() -> Optional[Dict[str, Any]]:
+    if not PILLARS_CACHE_PATH.exists():
+        return None
+    try:
+        payload = json.loads(PILLARS_CACHE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return None
+        return _normalize_pillars_payload(payload)
+    except Exception:
+        return None
+
+
+def _save_cached_pillars(payload: Dict[str, Any]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PILLARS_CACHE_PATH.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def _extract_json_payload(text: str) -> Dict[str, Any]:
     content = (text or "").strip()
     if not content:
         raise ValueError("Empty response content.")
+
+    # Strip fenced code blocks if present.
+    content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"\s*```$", "", content)
+
     start = content.find("{")
-    end = content.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    if start == -1:
         raise ValueError("No JSON object found in response.")
-    return json.loads(content[start : end + 1])
+
+    decoder = json.JSONDecoder()
+    parse_errors: List[str] = []
+
+    for candidate in (
+        content[start:],
+        re.sub(r",\s*([}\]])", r"\1", content[start:]),
+    ):
+        try:
+            payload, _ = decoder.raw_decode(candidate)
+            if not isinstance(payload, dict):
+                raise ValueError("Top-level JSON payload must be an object.")
+            return payload
+        except Exception as exc:
+            parse_errors.append(str(exc))
+
+    # Salvage attempt: if the model appended trailing broken text, try parsing up to
+    # the last plausible object terminator.
+    core = content[start:]
+    closing_positions = [idx for idx, ch in enumerate(core) if ch == "}"]
+    for idx in reversed(closing_positions[-60:]):
+        candidate = core[: idx + 1]
+        try:
+            payload, _ = decoder.raw_decode(candidate)
+            if not isinstance(payload, dict):
+                continue
+            return payload
+        except Exception as exc:
+            parse_errors.append(str(exc))
+
+    raise ValueError(f"Invalid JSON payload from model. Parse errors: {' | '.join(parse_errors)}")
 
 
 def _build_pillars_markdown(payload: Dict[str, Any]) -> str:
@@ -313,44 +397,80 @@ def generate_content_pillars(
     max_tokens: int,
     retries: int,
     timeout: float,
+    force_regenerate: bool = False,
 ) -> Tuple[Dict[str, Any], str, Any]:
+    if not force_regenerate:
+        cached_payload = _load_cached_pillars()
+        if cached_payload:
+            pillar_md = _build_pillars_markdown(cached_payload)
+            topic_options, default_topic = _pillars_to_topic_options(cached_payload)
+            topic_update = gr.update(choices=topic_options, value=default_topic)
+            return cached_payload, pillar_md, topic_update
+
     if not os.getenv("OPENAI_API_KEY"):
-        message = "OPENAI_API_KEY not found in environment."
+        message = "OPENAI_API_KEY not found in environment and no cached pillars available."
         return {"error": message}, message, gr.update()
 
     template = _load_prompt_file("pillar_generation_prompt.txt")
-    user_prompt = template
+    user_prompt = _build_pillar_prompt(template, target_persona)
+    base_max_tokens = max(1200, int(max_tokens))
     config = {
         "model": (custom_model or model or "").strip(),
         "temperature": temperature,
-        "max_tokens": max(600, int(max_tokens)),
+        "max_tokens": base_max_tokens,
         "retries": retries,
         "timeout": timeout,
+        "response_format": {"type": "json_object"},
     }
 
     try:
-        result = generate_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You generate reusable SME content pillars. "
-                        "Return strict JSON only matching the requested schema."
-                    ),
-                },
-                {"role": "user", "content": user_prompt},
-            ],
-            config=config,
-        )
-        payload = _extract_json_payload(result.get("content", ""))
-        payload["user_id"] = payload.get("user_id") or ""
-        payload["version"] = payload.get("version") or "v1"
-        payload["created_at"] = payload.get("created_at") or datetime.now(timezone.utc).isoformat()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You generate reusable SME content pillars. "
+                    "Return strict JSON only matching the requested schema."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ]
 
-        pillars = payload.get("pillars", [])
-        if not isinstance(pillars, list):
-            raise ValueError("Invalid pillars payload: 'pillars' must be a list.")
-        payload["pillars"] = pillars[:6]
+        def _request_pillars(request_config: Dict[str, Any]) -> Dict[str, Any]:
+            result = generate_completion(messages=messages, config=request_config)
+            content = (result.get("content") or "").strip()
+            if not content:
+                llm_error = (result.get("error") or "").strip()
+                if llm_error:
+                    raise ValueError(f"Model returned empty content. LLM error: {llm_error}")
+                raise ValueError("Model returned empty content.")
+            return _extract_json_payload(content)
+
+        request_variants: List[Dict[str, Any]] = [
+            dict(config),
+            # Some model/provider combinations reject response_format=json_object.
+            {k: v for k, v in config.items() if k != "response_format"},
+            # Last retry with more output budget in case of truncation.
+            {
+                **{k: v for k, v in config.items() if k != "response_format"},
+                "max_tokens": max(1800, base_max_tokens),
+                "temperature": min(float(temperature), 0.5),
+            },
+        ]
+
+        last_exc: Optional[Exception] = None
+        payload: Optional[Dict[str, Any]] = None
+        for variant in request_variants:
+            try:
+                payload = _request_pillars(variant)
+                break
+            except Exception as exc:
+                last_exc = exc
+
+        if payload is None:
+            raise ValueError(str(last_exc) if last_exc else "Unable to generate pillars.")
+
+        payload = _normalize_pillars_payload(payload)
+        _save_cached_pillars(payload)
 
         pillar_md = _build_pillars_markdown(payload)
         topic_options, default_topic = _pillars_to_topic_options(payload)
@@ -359,6 +479,48 @@ def generate_content_pillars(
     except Exception as exc:
         message = f"Failed to generate pillars: {exc}"
         return {"error": message}, message, gr.update()
+
+
+def load_or_generate_content_pillars(
+    target_persona: str,
+    model: str,
+    custom_model: Optional[str],
+    temperature: float,
+    max_tokens: int,
+    retries: int,
+    timeout: float,
+) -> Tuple[Dict[str, Any], str, Any]:
+    return generate_content_pillars(
+        target_persona=target_persona,
+        model=model,
+        custom_model=custom_model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        retries=retries,
+        timeout=timeout,
+        force_regenerate=False,
+    )
+
+
+def regenerate_content_pillars(
+    target_persona: str,
+    model: str,
+    custom_model: Optional[str],
+    temperature: float,
+    max_tokens: int,
+    retries: int,
+    timeout: float,
+) -> Tuple[Dict[str, Any], str, Any]:
+    return generate_content_pillars(
+        target_persona=target_persona,
+        model=model,
+        custom_model=custom_model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        retries=retries,
+        timeout=timeout,
+        force_regenerate=True,
+    )
 
 
 def show_dashboard_view() -> Tuple[Any, Any]:
@@ -384,11 +546,10 @@ def run_generation(
     steps: List[str] = []
     topic = (topic or "").strip()
     target_persona = (target_persona or "").strip()
+    prompt_persona = target_persona or "SME decision makers"
 
     if not topic:
         return "Validation failed: Topic is required.", "", "", None, {}, gr.update(visible=False)
-    if not target_persona:
-        return "Validation failed: Target persona is required.", "", "", None, {}, gr.update(visible=False)
     if not (custom_model or model):
         return "Validation failed: Model selection is required.", "", "", None, {}, gr.update(visible=False)
 
@@ -412,7 +573,7 @@ def run_generation(
         )
         feedback_guidance, feedback_meta = build_feedback_guidance(
             post_type=post_type,
-            target_persona=target_persona,
+            target_persona=prompt_persona,
         )
         config["feedback_guidance"] = feedback_guidance
         steps.append(
@@ -424,7 +585,7 @@ def run_generation(
         draft_post, metadata = generate_post(
             topic=topic,
             post_type=post_type,
-            business_objective=target_persona,
+            business_objective=prompt_persona,
             config=config,
         )
         selected_angle = (
@@ -442,7 +603,7 @@ def run_generation(
             draft_post=draft_post,
             topic=topic,
             post_type=post_type,
-            business_objective=target_persona,
+            business_objective=prompt_persona,
             config=config,
         )
         if not refined_post:
@@ -459,7 +620,7 @@ def run_generation(
             draft_post=refined_post,
             topic=topic,
             post_type=post_type,
-            business_objective=target_persona,
+            business_objective=prompt_persona,
             config=config,
             brand_feedback_summary=initial_brand_result.get("feedback_summary", ""),
             brand_score=int(initial_brand_result.get("score", 0)),
@@ -475,7 +636,7 @@ def run_generation(
                 generate_hashtags,
                 post=final_post,
                 topic=topic,
-                business_objective=target_persona,
+                business_objective=prompt_persona,
                 config=config,
             )
             future_image = executor.submit(
@@ -773,13 +934,13 @@ def build_interface() -> gr.Blocks:
             inputs=[],
             outputs=[dashboard_view, pillars_view],
         ).then(
-            fn=generate_content_pillars,
+            fn=load_or_generate_content_pillars,
             inputs=[target_persona, model, custom_model, temperature, max_tokens, retries, timeout],
             outputs=[pillars_json, pillars_markdown, topic],
         )
 
         refresh_pillars_btn.click(
-            fn=generate_content_pillars,
+            fn=regenerate_content_pillars,
             inputs=[target_persona, model, custom_model, temperature, max_tokens, retries, timeout],
             outputs=[pillars_json, pillars_markdown, topic],
         )

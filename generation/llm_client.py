@@ -106,11 +106,18 @@ def generate_completion(messages: List[Dict[str, str]], config: Dict[str, Any]) 
 
     for attempt in range(1, retries + 1):
         try:
+            request_kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            response_format = config.get("response_format")
+            if response_format:
+                request_kwargs["response_format"] = response_format
+
             response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                **request_kwargs,
             )
 
             content = (response.choices[0].message.content or "").strip()
