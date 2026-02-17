@@ -8,6 +8,7 @@ if __package__ in (None, ""):
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from generation.llm_client import generate_completion
+from generation.generate_post import doc_processor
 
 
 BRAND_CHECK_SYSTEM_PROMPT = """
@@ -27,10 +28,14 @@ def _load_prompt_file(filename: str) -> str:
     return prompt_path.read_text(encoding="utf-8").strip()
 
 
-def _build_brand_check_prompt(post: str) -> str:
+def _build_brand_check_prompt(post: str, brand_context: str) -> str:
     template = _load_prompt_file("brand_check_prompt.txt")
     # Use direct token replacement so JSON braces in the template are not interpreted.
-    return template.replace("{post}", post)
+    return (
+        template.replace("{post}", post)
+        .replace("{brand_context}", brand_context)
+        .replace("{market_context}", "N/A")
+    )
 
 
 def _safe_int(value: Any, low: int, high: int) -> int:
@@ -67,9 +72,11 @@ def check_brand_consistency(post: str, config: Dict[str, Any]) -> Tuple[Dict[str
         metadata = {"error": "Empty post input."}
         return result, metadata
 
+    brand_context = doc_processor.search(post)
+
     messages = [
         {"role": "system", "content": BRAND_CHECK_SYSTEM_PROMPT},
-        {"role": "user", "content": _build_brand_check_prompt(post)},
+        {"role": "user", "content": _build_brand_check_prompt(post, brand_context=brand_context)},
     ]
 
     llm_result = generate_completion(messages=messages, config=config)

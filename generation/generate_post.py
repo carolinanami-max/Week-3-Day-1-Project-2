@@ -85,18 +85,16 @@ def _build_user_prompt(
     template_text: str,
     topic: str,
     business_objective: str,
+    brand_context: str,
     angle_instruction: str = "",
     feedback_guidance: str = "",
 ) -> str:
-    # GET RAG CONTEXT FROM KNOWLEDGE BASE
-    context = doc_processor.search(topic)
-    
     # Format template with context
     base = template_text.format(
         topic=topic,
         audience="SME decision makers",
         goal=business_objective,
-        brand_context=context,
+        brand_context=brand_context,
         market_context="N/A",
     )
     sections = [base]
@@ -113,6 +111,7 @@ def _generate_candidate_drafts(
     topic: str,
     post_type: str,
     business_objective: str,
+    brand_context: str,
     config: Dict[str, Any],
     feedback_guidance: str = "",
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -124,6 +123,7 @@ def _generate_candidate_drafts(
             template_text=template_text,
             topic=topic,
             business_objective=business_objective,
+            brand_context=brand_context,
             angle_instruction=angle_instruction,
             feedback_guidance=feedback_guidance,
         )
@@ -231,7 +231,14 @@ def generate_post(
             f"Use one of: {', '.join(sorted(TEMPLATE_MAP.keys()))}"
         )
 
-    system_prompt = _load_prompt_file("system_prompt.txt")
+    rag_query = f"{topic}. Business objective: {business_objective}. Post type: {normalized_type}."
+    brand_context = doc_processor.search(rag_query)
+
+    system_prompt_template = _load_prompt_file("system_prompt.txt")
+    system_prompt = (
+        system_prompt_template.replace("{brand_context}", brand_context)
+        .replace("{market_context}", "N/A")
+    )
     template_text = _load_prompt_file(TEMPLATE_MAP[normalized_type])
     feedback_guidance = str(config.get("feedback_guidance", "") or "")
     candidates, candidate_failures = _generate_candidate_drafts(
@@ -240,6 +247,7 @@ def generate_post(
         topic=topic,
         post_type=normalized_type,
         business_objective=business_objective,
+        brand_context=brand_context,
         config=config,
         feedback_guidance=feedback_guidance,
     )
