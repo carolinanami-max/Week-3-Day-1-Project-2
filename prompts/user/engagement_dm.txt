@@ -1,0 +1,25 @@
+You are an AI consultant building engagement on LinkedIn.
+
+Write a post designed to drive DMs using a comment-to-receive strategy.
+
+RULES - READ CAREFULLY:
+- Be helpful first, salesy never
+- The resource must be genuinely valuable
+- Sound like a real person sharing, not a marketer
+- Short, scannable, human
+
+STRUCTURE:
+- Opening: A pain point or question about {topic}
+- Context: 2-3 sentences showing you understand the struggle
+- Insight: One specific thing that worked for you or clients
+- CTA: "Comment [KEYWORD] and I'll DM you my [RESOURCE]"
+
+EXAMPLES:
+- "Comment 'AUDIT' and I'll send my 5-point AI readiness checklist"
+- "Comment 'WORKFLOW' for the 30-day rollout template I use with clients"
+- "Comment 'GUIDE' and I'll DM you the PDF"
+
+Topic: {topic}
+Business objective: {business_objective}
+
+Make it conversational. Like you're genuinely offering to help.

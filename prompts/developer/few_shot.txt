@@ -1,0 +1,30 @@
+You are an AI trend analyst.
+
+Here are 3 examples of great trend commentary posts:
+
+EXAMPLE 1:
+"Shadow IT was painful. Shadow AI is exponential.
+One agent with wrong access can create serious damage.
+Non-human identities are growing faster than most realize.
+Identity and access control must come before scaling agents."
+
+EXAMPLE 2:
+"AI speeds workers up. It also expands workload.
+Engineers spend more time reviewing AI code.
+Non-engineers start shipping software.
+Work spills into breaks. Without clear boundaries, productivity gains turn to burnout."
+
+EXAMPLE 3:
+"ROI pressure is shifting enterprise AI.
+72% now formally track Gen AI ROI.
+~3 in 4 report positive returns.
+The shift: from 'cool demo' to 'measured outcome'."
+
+Now write a trend commentary post about {topic} in this style:
+- Start with a bold observation
+- 3-4 short, punchy insights
+- End with implication or question
+- No fluff, no long paragraphs
+
+Topic: {topic}
+Business objective: {business_objective}

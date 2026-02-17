@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Tuple
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv()  # Add this line
 
 # Set up logger first
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ from src.document_processor import DocumentProcessor
 
 # Initialize document processor for RAG
 doc_processor = DocumentProcessor()
-doc_processor.load_all()
+doc_processor.load_all()  # Load knowledge base once
 logger.info("📚 RAG knowledge base loaded")
 
 OPENAI_MODEL_OPTIONS = [
@@ -36,12 +36,10 @@ OPENAI_MODEL_OPTIONS = [
     "gpt-4.1-nano",
 ]
 
-# Updated to point to user folder with all 4 post types
 TEMPLATE_MAP = {
-    "thought_leadership": "user/thought_leadership.txt",
-    "educational": "user/educational.txt",
-    "trend_commentary": "user/trend_commentary.txt",
-    "engagement_dm": "user/engagement_dm.txt",
+    "thought_leadership": "thought_leadership.txt",
+    "educational": "educational.txt",
+    "trend_commentary": "trend_commentary.txt",
 }
 
 ANGLE_STRATEGIES = [
@@ -52,6 +50,25 @@ ANGLE_STRATEGIES = [
     ),
     ("case_first", "Start with a concrete case/example first, then extract the insight and implication."),
 ]
+
+STATIC_EXAMPLES = [
+    {
+        "topic": "Why SME teams fail at AI adoption after pilot success",
+        "post_type": "thought_leadership",
+        "business_objective": "Build authority with SME founders and generate inbound consulting leads",
+    },
+    {
+        "topic": "How to design a 30-day AI workflow rollout for a 20-person services company",
+        "post_type": "educational",
+        "business_objective": "Educate SME operators with practical implementation guidance",
+    },
+    {
+        "topic": "Shift from AI experimentation to AI operations in small businesses",
+        "post_type": "trend_commentary",
+        "business_objective": "Position as a strategic advisor on SME AI execution",
+    },
+]
+
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -74,23 +91,14 @@ def _build_user_prompt(
     # GET RAG CONTEXT FROM KNOWLEDGE BASE
     context = doc_processor.search(topic)
     
-    print(f"DEBUG: business_objective value = '{business_objective}'")
-    print(f"DEBUG: template_text contains: {template_text[:100]}...")
-    
     # Format template with context
-    try:
-        base = template_text.format(
-            topic=topic,
-            audience="SME decision makers",
-            business_objective=business_objective,
-            brand_context=context,
-            market_context="N/A",
-        )
-    except KeyError as e:
-        print(f"DEBUG: KeyError: {e}")
-        print(f"DEBUG: Available keys in template: {{'topic', 'audience', 'business_objective', 'brand_context', 'market_context'}}")
-        raise
-    
+    base = template_text.format(
+        topic=topic,
+        audience="SME decision makers",
+        goal=business_objective,
+        brand_context=context,
+        market_context="N/A",
+    )
     sections = [base]
     if angle_instruction:
         sections.append(f"Additional angle instruction:\n- {angle_instruction}")
@@ -148,56 +156,45 @@ def _generate_candidate_drafts(
         for future in concurrent.futures.as_completed(futures):
             try:
                 idx, candidate = future.result()
-            except Exception as e:
-                print(f"DEBUG: Error in future: {e}")
+            except Exception:
                 continue
             if (candidate.get("text") or "").strip():
                 candidates_by_index[idx] = candidate
-            else:
-                print(f"DEBUG: Empty text for angle {idx}")
-
-    # DEBUG: Check if any candidates were generated
-    if not candidates_by_index:
-        print("DEBUG: No candidates generated. Testing each angle directly...")
-        for idx, (angle_name, angle_instruction) in enumerate(ANGLE_STRATEGIES):
-            print(f"DEBUG: Testing angle {idx}: {angle_name}")
-            user_prompt = _build_user_prompt(
-                template_text=template_text,
-                topic=topic,
-                business_objective=business_objective,
-                angle_instruction=angle_instruction,
-                feedback_guidance=feedback_guidance,
-            )
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ]
-            try:
-                llm_result = generate_completion(messages=messages, config=config)
-                text = (llm_result.get("content") or "").strip()
-                print(f"DEBUG: Result length: {len(text)}")
-                if text:
-                    print(f"DEBUG: Preview: {text[:100]}...")
-                    candidates_by_index[idx] = {
-                        "post_type": post_type,
-                        "angle": angle_name,
-                        "text": text,
-                        "llm": {
-                            "model": llm_result.get("model"),
-                            "attempts": llm_result.get("attempts"),
-                            "usage": llm_result.get("usage", {}),
-                            "length": llm_result.get("length", {}),
-                            "estimated_cost_usd": llm_result.get("estimated_cost_usd", 0.0),
-                            "error": llm_result.get("error"),
-                        },
-                    }
-                else:
-                    print("DEBUG: Empty response")
-            except Exception as e:
-                print(f"DEBUG: Error in direct test: {e}")
 
     ordered_indices = sorted(candidates_by_index.keys())
     return [candidates_by_index[idx] for idx in ordered_indices]
+
+
+def _build_mock_post(topic: str, post_type: str, business_objective: str) -> str:
+    if post_type == "thought_leadership":
+        return (
+            f"Most SME teams do not fail at AI because of tools.\n\n"
+            f"They fail because ownership is unclear after the pilot.\n\n"
+            f"In one client project on {topic}, the pilot worked, but no one owned handoff to operations. "
+            f"Within two weeks, usage dropped.\n\n"
+            f"The business implication is simple: if adoption accountability is missing, ROI disappears.\n\n"
+            f"Practical takeaway: assign one workflow owner before rollout day.\n\n"
+            f"CTA: Are you assigning AI ownership at the team level or only at leadership level?"
+        )
+    if post_type == "educational":
+        return (
+            f"If AI rollout feels messy, the problem is usually sequence.\n\n"
+            f"Concept: operational adoption beats technical adoption.\n\n"
+            f"Step 1: choose one workflow tied to a KPI.\n"
+            f"Step 2: define owner, trigger, and review cadence.\n"
+            f"Step 3: measure outcome weekly and tighten process.\n\n"
+            f"Example workflow for {topic}: intake -> draft -> review -> client-ready output with clear handoffs.\n\n"
+            f"SME application: start with one team and one measurable outcome to keep resource load realistic.\n\n"
+            f"CTA: Want a one-page rollout checklist I use with SME clients?"
+        )
+    return (
+        f"Trend summary: SMEs are moving from AI experimentation to operational integration.\n\n"
+        f"What changed is not model quality alone. It is pressure for measurable business outcomes.\n\n"
+        f"For SMEs, this matters because ad-hoc prompting does not scale under limited team capacity.\n\n"
+        f"Tactical implication: standardize one high-frequency workflow first, then expand.\n\n"
+        f"Example: a small services team used a fixed discovery-call summary workflow and cut prep time by 35%.\n\n"
+        f"CTA: Which workflow in your business is ready for standardization this quarter?"
+    )
 
 
 def generate_post(
@@ -248,7 +245,7 @@ def generate_post(
         "topic": topic,
         "post_type": normalized_type,
         "business_objective": business_objective,
-        "rag_context_used": True,
+        "rag_context_used": True,  # Added to metadata
         "prompt_files": {
             "system": "prompts/system_prompt.txt",
             "template": f"prompts/{TEMPLATE_MAP[normalized_type]}",
@@ -276,14 +273,14 @@ def generate_post(
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate a LinkedIn post with OpenAI")
-    parser.add_argument("--topic", required=True, help="Post topic")
+    parser.add_argument("--topic", required=False, help="Post topic")
     parser.add_argument(
         "--post-type",
-        required=True,
+        required=False,
         choices=sorted(TEMPLATE_MAP.keys()),
         help="Type of post template to use",
     )
-    parser.add_argument("--business-objective", required=True, help="Business objective for this post")
+    parser.add_argument("--business-objective", required=False, help="Business objective for this post")
     parser.add_argument(
         "--model",
         default=OPENAI_MODEL_OPTIONS[0],
@@ -305,6 +302,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print metadata JSON only",
     )
+    parser.add_argument(
+        "--run-static-examples",
+        action="store_true",
+        help="Run built-in static examples (also used automatically when no required inputs are provided)",
+    )
     return parser
 
 
@@ -324,7 +326,54 @@ def main() -> None:
     if args.api_key:
         config["api_key"] = args.api_key
 
+    use_static_examples = args.run_static_examples or not (
+        args.topic and args.post_type and args.business_objective
+    )
     has_api_key = bool(config.get("api_key") or os.getenv("OPENAI_API_KEY"))
+
+    if use_static_examples:
+        for idx, example in enumerate(STATIC_EXAMPLES, start=1):
+            if has_api_key:
+                post, metadata = generate_post(
+                    topic=example["topic"],
+                    post_type=example["post_type"],
+                    business_objective=example["business_objective"],
+                    config=config,
+                )
+            else:
+                post = _build_mock_post(
+                    topic=example["topic"],
+                    post_type=example["post_type"],
+                    business_objective=example["business_objective"],
+                )
+                metadata = {
+                    "topic": example["topic"],
+                    "post_type": example["post_type"],
+                    "business_objective": example["business_objective"],
+                    "rag_context_used": False,
+                    "prompt_files": {
+                        "system": "prompts/system_prompt.txt",
+                        "template": f"prompts/{TEMPLATE_MAP[example['post_type']]}",
+                    },
+                    "llm": {
+                        "model": "mock-static-example",
+                        "attempts": 0,
+                        "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+                        "length": {"prompt_chars": 0, "completion_chars": len(post)},
+                        "estimated_cost_usd": 0.0,
+                        "error": None,
+                    },
+                }
+            if args.metadata_only:
+                print(json.dumps(metadata, indent=2))
+            else:
+                print(f"=== STATIC EXAMPLE {idx} ({example['post_type']}) ===")
+                print(post)
+                print("\n--- METADATA ---")
+                print(json.dumps(metadata, indent=2))
+                print()
+        return
+
     if not has_api_key:
         raise ValueError("OPENAI_API_KEY is not set. Provide --api-key or export OPENAI_API_KEY.")
 
